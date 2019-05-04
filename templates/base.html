@@ -1,25 +1,25 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
-<head>
-    <title>{{title}}</title>
-    <style>
-        h1{
-            text-align: center;
-            background-color: lightgreen;
-        }
-        .error{
-            color: red;
-        }
-        a{
-            color:blue;
-        }
-    </style>
-</head>
+
+    <head>
+        <title>{%block title %} {% endblock %}</title>
+        <h1 align="center">{%block header %} {% endblock %}</h1>
+        <link rel= "stylesheet" type= "text/css" href= "{{ url_for('static',filename='css/styles.css') }}">
+    </head>
 <body>
+    <div>
+        <h1>Blogz</h1>
+    </div>
     <nav>
-        <a href="/blog">Main Blog Page</a> | 
-        <a href="/newpost">Add a Blog Entry</a>
+      <ul>
+        <li><a href="/">Home Page</a></li>
+        <li><a href="/blog">My Posts</a> </li>
+        <li><a href="/newpost">Create a New Post</a></li>
+        <li><a href="/login">Login</a></li>
+        <li><a href="/logout">Logout</a></li>
+      </ul>
     </nav>
+    </br>
 
     {% block content %}
     {% endblock %}
