@@ -1,5 +1,6 @@
 from flask import Flask, request, redirect, render_template, flash, session
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import Integer, ForeignKey, String, Column
 from datetime import datetime
 
 
@@ -8,44 +9,40 @@ app.config['DEBUG'] = True
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://blogz:Life1988@localhost:8889/blogz'
 app.config['SQLALCHEMY_ECHO'] = True
 db = SQLAlchemy(app)
-app.secret_key = "jfie838jFJf5h03.s{#"
+app.secret_key = 'God'
 
-
-class Blogz(db.Model):
+class Blog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    owner_id = db.Column(db.Integer, db.ForeignKey('User.id'))
+    #owner_id = db.Column(db.Integer, foreign_key('User'))
     title = db.Column(db.String(120))
-    content = db.Column(db.String(1500))
-    author_id = db.Column(db.Integer, db.ForeignKey('user.id'))
-    pubdate = db.Column(db.DateTime)
+    body = db.Column(db.Text)
 
-    def __init__(self, title, content, author_id, pubdate = None):
+    def __init__(self, owner, title, body):
+        self.owner = owner
         self.title = title
-        self.content = content
-        self.author_id = author_id
-        if pubdate is None:
-            pubdate = datetime.utcnow()
-        self.pubdate = pubdate
+        self.body = body
 
 class User(db.Model):
+    __tablename__ = 'User'
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(15), unique=True)
     password = db.Column(db.String(20))
-    blogs = db.relationship('Blogz', backref='user')
+    #blogs = db.Column(db.Text)
+    blogs = db.relationship('Blog', backref='owner')
 
     def __init__(self, username, password):
         self.username = username
         self.password = password
+        #self.blogs = blogs
 
-def getAllBlog():
-    return Blogz.query.all()
+allowed_routes = ['login', 'signup', 'index', 'blog', 'static', 'singleUser']
 
-def getAllUser():
-    return User.query.all()
 
 @app.before_request
 def req_login():
-    allowed_routes = ['login', 'signup', 'index', 'blog']
-    if request.endpoint not in allowed_routes and 'username' not in session:
+    
+    if not (request.endpoint in allowed_routes or 'username' in session):
         return redirect('/login')
 
 @app.route('/logout')
@@ -160,74 +157,67 @@ def index():
 
 @app.route('/singleuser', methods=['GET'])
 def showuser():
-    users = User.query.filter_by(username=session['user_id']).first()
-    user_id = request.args.get('users')
-    blogs = Blog.query.filter_by(username=user_id).all()
-    return render_template('singleuser.html', users=users, blogs=blogs)
+    user_id = request.args.get('user')
+    user = User.query.filter_by(id=user_id).first()
+    blogs = Blog.query.filter_by(owner_id=user_id).all()
+    return render_template('singleuser.html', user=user, blogs=blogs)
 
 
 
 # TODO: redirected from / showing all blogs
 @app.route('/blog', methods=['GET'])
 def blog():
-    blogs = Blogz.query.all()
     blog_id = request.args.get('id')
-    blog_post = Blogz.query.filter_by(id=blog_id).first()
-    author_id = blog_post.author_id
-    user = User.query.get(author_id)
-    return render_template('blog.html', title='Your Blog', blogs=blogs, user_id=blog_id, username=author_id, blog=blog_post, user=user)
 
-# TODO: query all blogs and return/gets the selected blog
+    if blog_id == None:
+        posts = Blog.query.all()
+        return render_template('blog.html', blogs=posts, title='blogz')
+    else:
+        post = Blog.query.get(blog_id)
+        return render_template('entry.html', post=post, title='Blog Entry')
+
+### TODO: query all blogs and return/gets the selected blog
 @app.route('/selected_blog', methods=['GET'])
 def selected_blog():
     blog_id = request.args.get('id')
     blog_post = Blogz.query.get(blog_id)
-    author_id = blog_post.author_id
-    user = User.query.get(author_id)
-    return render_template('selected_blog.html', user_id=blog_id, blog=blog_post, user=author_id, username=user)
+    owner_id = blog_post.owner_id
+    user = User.query.get(owner_id)
+    return render_template('selected_blog.html', user_id=blog_id, blog=blog_post, user=owner_id, username=user)
 
 
 
-# TODO: new post and check for errors
+
 @app.route('/newpost', methods=['POST', 'GET'])
-def newpost():
-    # currently no errors
-    title_error = ''
-    content_error = ''
-    error_check = False
-
-    if request.method == 'GET':
-        return render_template('newpost.html', title="Add a Blog Entry")
-
+def new_post():
     if request.method == 'POST':
         blog_title = request.form['blog_title']
-        blog_content = request.form['blog_content']
-        blog_pubdate = datetime.now()
-        author_id = User.query.filter_by(username=session['username']).first().id
+        blog_body = request.form['blog_body']
+        username = session['username']
+        title_error = ''
+        body_error = ''
 
-        # no title error send to newpost
-        if not blog_title:
-            title_error = 'No Title Written'
-            error_check = True
+        if blog_title == None:
+            title_error = "Please enter a blog title"
+            print(title_error)
+        if not blog_body:
+            body_error = "Please enter a blog entry"
+            print(body_error)
 
-            # no content error send to newpost
-        if not blog_content:
-            content_error = 'Write something!'
-            error_check = True
+        if not body_error and not title_error:
+            new_entry = Blog(logged_in_user(username), blog_title, blog_body)     
+            db.session.add(new_entry)
+            db.session.commit()        
+            return redirect('/blog?id={}'.format(new_entry.id)) 
+        else:
+            return render_template('newpost.html', title='New Entry', title_error=title_error, body_error=body_error, 
+                blog_title=blog_title, blog_body=blog_body)
+    return render_template('newpost.html', title='New Entry')
 
-            # redirect to blog
-        if error_check:
-            return render_template('newpost.html', title_error=title_error, content_error=content_error)
-
-        if (not title_error and not content_error):
-            new_blog = Blogz(blog_title, blog_content, author_id)
-            db.session.add(new_blog)
-            db.session.commit()
-            blog_id = str(new_blog.id)
-            return redirect('/selected_blog?id='+ blog_id)
-
-    return render_template('newpost.html', title='New Post')
-
+def logged_in_user(username):
+    user = User.query.filter_by(username= username).first()
+    return user
+    
 
 if __name__ == '__main__':
     app.run()
